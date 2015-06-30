@@ -107,11 +107,13 @@ class RequestAuthenticate(Request):
         def sha1(values):
             sha1 = hashlib.sha1()
             for i in values:
+                if isinstance(i, str):
+                    i = i.encode()
                 sha1.update(i)
             return sha1.digest()
 
         def strxor(rhs, lhs):
-                return "".join(chr(ord(x) ^ ord(y)) for x, y in zip(rhs, lhs))
+            return bytes(x ^ y for x, y in zip(rhs, lhs))
 
         hash1 = sha1((password,))
         hash2 = sha1((hash1,))

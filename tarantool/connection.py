@@ -154,16 +154,14 @@ class Connection(object):
             raise NetworkError(e)
 
     def _recv(self, to_read):
-        buf = ''
+        buf = b''
         while to_read > 0:
-            try:
-                tmp = self._socket.recv(to_read)
-            except socket.error:
+            tmp = self._socket.recv(to_read)
+            if not tmp:
                 raise NetworkError(socket.error(errno.ECONNRESET,
                                    "Lost connection to server during query"))
-            else:
-                to_read -= len(tmp)
-                buf += tmp
+            to_read -= len(tmp)
+            buf += tmp
         return buf
 
     def _read_response(self):
@@ -188,7 +186,7 @@ class Connection(object):
 
         # Repeat request in a loop if the server returns completion_status == 1
         # (try again)
-        for attempt in xrange(RETRY_MAX_ATTEMPTS):    # pylint: disable=W0612
+        for attempt in range(RETRY_MAX_ATTEMPTS):    # pylint: disable=W0612
             self._socket.sendall(bytes(request))
             response = Response(self, self._read_response())
 
@@ -209,19 +207,13 @@ class Connection(object):
 
         def check():  # Check that connection is alive
             buf = ctypes.create_string_buffer(2)
-            try:
-                sock_fd = self._socket.fileno()
-            except socket.error as e:
-                if e.errno == errno.EBADF:
-                    return errno.ECONNRESET
-            else:
-                self._sys_recv(sock_fd, buf, 1,
-                               socket.MSG_DONTWAIT | socket.MSG_PEEK)
-                if ctypes.get_errno() == errno.EAGAIN:
-                    ctypes.set_errno(0)
-                    return errno.EAGAIN
-                return (ctypes.get_errno() if ctypes.get_errno()
-                        else errno.ECONNRESET)
+            self._sys_recv(self._socket.fileno(), buf, 1,
+                           socket.MSG_DONTWAIT | socket.MSG_PEEK)
+            if ctypes.get_errno() == errno.EAGAIN:
+                ctypes.set_errno(0)
+                return errno.EAGAIN
+            return (ctypes.get_errno() if ctypes.get_errno()
+                    else errno.ECONNRESET)
 
         last_errno = check()
         if self.connected and last_errno == errno.EAGAIN:
@@ -234,10 +226,9 @@ class Connection(object):
             try:
                 self.connect_basic()
             except NetworkError as e:
-                pass
-            else:
-                if self.connected:
-                    break
+                last_errno = e.errno
+            if last_errno == 0:
+                break
             warn("Reconnect attempt %d of %d" %
                  (attempt, self.reconnect_max_attempts), NetworkWarning)
             if attempt == self.reconnect_max_attempts:
@@ -328,7 +319,7 @@ class Connection(object):
 
         :rtype: `Response` instance
         '''
-        if isinstance(space_name, basestring):
+        if isinstance(space_name, str):
             space_name = self.schema.get_space(space_name).sid
         request = RequestReplace(self, space_name, values)
         return self._send_request(request)
@@ -377,7 +368,7 @@ class Connection(object):
 
         :rtype: `Response` instance
         '''
-        if isinstance(space_name, basestring):
+        if isinstance(space_name, str):
             space_name = self.schema.get_space(space_name).sid
         request = RequestInsert(self, space_name, values)
         return self._send_request(request)
@@ -397,9 +388,9 @@ class Connection(object):
         index_name = kwargs.get("index", 0)
 
         key = check_key(key)
-        if isinstance(space_name, basestring):
+        if isinstance(space_name, str):
             space_name = self.schema.get_space(space_name).sid
-        if isinstance(index_name, basestring):
+        if isinstance(index_name, str):
             index_name = self.schema.get_index(space_name, index_name).iid
         request = RequestDelete(self, space_name, index_name, key)
         return self._send_request(request)
@@ -427,9 +418,9 @@ class Connection(object):
         index_name = kwargs.get("index", 0)
 
         key = check_key(key)
-        if isinstance(space_name, basestring):
+        if isinstance(space_name, str):
             space_name = self.schema.get_space(space_name).sid
-        if isinstance(index_name, basestring):
+        if isinstance(index_name, str):
             index_name = self.schema.get_index(space_name, index_name).iid
         request = RequestUpdate(self, space_name, index_name, key, op_list)
         return self._send_request(request)
@@ -503,9 +494,9 @@ class Connection(object):
         # tuples)
         key = check_key(key, select=True)
 
-        if isinstance(space_name, basestring):
+        if isinstance(space_name, str):
             space_name = self.schema.get_space(space_name).sid
-        if isinstance(index_name, basestring):
+        if isinstance(index_name, str):
             index_name = self.schema.get_index(space_name, index_name).iid
         request = RequestSelect(self, space_name, index_name, key, offset,
                                 limit, iterator_type)
